@@ -1,18 +1,19 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import './Dashboard.css';
+
 const Dashboard = () => {
     const [userData, setUserData] = useState(null);
     const [longUrl, setLongUrl] = useState('');
     const [shortenedUrl, setShortenedUrl] = useState('');
     const [shortenedUrlDetails, setShortenedUrlDetails] = useState(null);
     const [originalUrlDetails, setOriginalUrlDetails] = useState(null);
-    const clickCountRef = useRef(0);
-    const [clickCount, setClickCount] = useState(0);
+
     const handleLogout = () => {
         localStorage.removeItem('authToken');
         setUserData(null);
         window.location.href = '/';
     };
+
     const fetchProtectedData = async () => {
         try {
             const token = localStorage.getItem('authToken');
@@ -20,14 +21,12 @@ const Dashboard = () => {
                 handleLogout();
                 return;
             }
-
             const response = await fetch('https://urslhashingtask-production.up.railway.app/auth/protected', {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                 },
             });
-
             if (!response.ok) {
                 const errorData = await response.json();
                 console.error('Error fetching protected data:', errorData);
@@ -43,6 +42,7 @@ const Dashboard = () => {
             console.error('Error fetching protected data:', error);
         }
     };
+
     const handleUrlShorten = async () => {
         try {
             const token = localStorage.getItem('authToken');
@@ -59,75 +59,59 @@ const Dashboard = () => {
                 },
                 body: JSON.stringify({ longUrl }),
             });
-
             if (!response.ok) {
                 const errorData = await response.json();
                 console.error('Error shortening URL:', errorData);
             } else {
                 const data = await response.json();
                 console.log('Shortened URL details:', data);
+                const { shorthash } = data;
                 setShortenedUrl(data.shortUrl);
-                setShortenedUrlDetails(data);
+                setShortenedUrlDetails({ ...data, shorthash });
             }
         } catch (error) {
             console.error('Error shortening URL:', error);
         }
     };
-    const fetchOriginalUrlDetails = async (shortHash) => {
+
+    const handleOpenOriginalUrl = async (event) => {
         try {
+            event.preventDefault(); 
             const token = localStorage.getItem('authToken');
             if (!token) {
                 handleLogout();
                 return;
             }
-
-            const response = await fetch(`https://urslhashingtask-production.up.railway.app/api/url/${shortHash}`, {
-                method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Error fetching original URL details:', errorData);
-                if (response.status === 404) {
-                    alert('This link has expired.');
+            if (shortenedUrlDetails && shortenedUrlDetails.shorthash) {
+                const response = await fetch(`https://urslhashingtask-production.up.railway.app/api/url/${shortenedUrlDetails.shorthash}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                    },
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error('Error fetching original URL details:', errorData);
+                } else {
+                    const data = await response.json();
+                    console.log('Original URL details:', data);
+                    if (event.target.tagName.toLowerCase() === 'a') {
+                        window.open(data.originalUrl, '_blank');
+                    } else {
+                        window.location.href = data.originalUrl;
+                    }
                 }
             } else {
-                const data = await response.json();
-                console.log('Original URL details:', data);
-                setOriginalUrlDetails(data);
+                console.error('Shortened URL details are not available.');
             }
         } catch (error) {
             console.error('Error fetching original URL details:', error);
         }
     };
 
-    const handleMenuClick = (menuItem) => {
-        if (menuItem === 'originalUrl' && shortenedUrlDetails) {
-            setClickCount((prevCount) => prevCount + 1);
-            clickCountRef.current = clickCountRef.current + 1;
 
-            if (clickCountRef.current === 2) {
-                alert('This link will expire after the next click.');
-            }
-
-            fetchOriginalUrlDetails(shortenedUrlDetails.shortUrl.shortHash);
-        }
-    };
     useEffect(() => {
-        setClickCount(0);
-        clickCountRef.current = 0;
-    }, [shortenedUrlDetails]);
-    useEffect(() => {
-        const storedUserData = JSON.parse(localStorage.getItem('userData'));
-        if (storedUserData) {
-            setUserData(storedUserData);
-            fetchProtectedData();
-        } else {
-            handleLogout();
-        }
+        fetchProtectedData();
     }, []);
 
     return (
@@ -137,14 +121,14 @@ const Dashboard = () => {
                 <nav>
                     <ul>
                         <li>Dashboard</li>
-                        <li onClick={() => handleMenuClick('originalUrl')}>Original Url</li>
+                        <li onClick={handleOpenOriginalUrl}>Original Url</li>
+                        {/* <button onClick={handleOpenOriginalUrl}>Open Original URL</button> */}
                     </ul>
                 </nav>
                 <div className="user-info">
                     <button onClick={handleLogout}>Logout</button>
                 </div>
             </aside>
-
             <main className="dashboard-content">
                 <header className="dashboard-header">
                     <h1>Welcome to Your Dashboard</h1>
@@ -164,31 +148,14 @@ const Dashboard = () => {
                         <p>Shortened URL details:</p>
                         <ul>
                             <li>
-                                <strong>Short Hash:</strong> {shortenedUrlDetails.shortUrl.shortHash}
+                                <strong>Short Url Link:</strong>{' '}
+                                <a href={shortenedUrlDetails.shortUrl} target="_blank" rel="noopener noreferrer" onClick={handleOpenOriginalUrl}>
+                                    {shortenedUrlDetails.shortUrl}
+                                </a>
                             </li>
-                            <li>
-                                <strong>Long URL:</strong> {shortenedUrlDetails.shortUrl.longUrl}
-                            </li>
-                            <li>
-                                <strong>Click Count:</strong> {shortenedUrlDetails.shortUrl.clickCount}
-                            </li>
-                            <li>
-                                <strong>max Clicks:</strong> {shortenedUrlDetails.shortUrl.maxClicks}
-                            </li>
-                            <li>
-                                <strong>createdBy:</strong> {shortenedUrlDetails.shortUrl.createdBy}
-                            </li>
+
                         </ul>
-                    </div>
-                )}
-                {originalUrlDetails && (
-                    <div className="original-url-details">
-                        <p>Original URL details:</p>
-                        <ul>
-                            <li>
-                                <strong>Original URL:</strong> {originalUrlDetails.originalUrl}
-                            </li>
-                        </ul>
+                      
                     </div>
                 )}
             </main>
